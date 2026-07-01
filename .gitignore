@@ -1,0 +1,17 @@
+.env
+myprint_login.json
+downloads/
+database/
+__pycache__/
+.venv/
+*.pyc
+.pytest_cache/
+.superpowers/
+*.log
+streamlit_*.txt
+streamlit_out.txt
+streamlit_err.txt
+screenshot*.png
+invoice_earchive.xlsx
+material_stat_daystock*.xlsx
+po*.xlsx
