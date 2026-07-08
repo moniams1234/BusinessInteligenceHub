@@ -9,9 +9,10 @@ lub podmień wartość WEBHOOK_URL poniżej.
 import json
 import os
 import sqlite3
-import urllib.request
 from datetime import date, timedelta
 from pathlib import Path
+
+import requests
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "database" / "sales_dashboard.db"
@@ -108,16 +109,14 @@ def build_message(today: date, prev: date, today_sales: dict, prev_sales: dict) 
 
 
 def send_to_discord(payload: dict, webhook_url: str) -> None:
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
+    resp = requests.post(
         webhook_url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
+        json=payload,
+        headers={"User-Agent": "MyPrintBot/1.0"},
+        timeout=15,
     )
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        if resp.status not in (200, 204):
-            raise RuntimeError(f"Discord zwrócił status {resp.status}")
+    if resp.status_code not in (200, 204):
+        raise RuntimeError(f"Discord zwrócił status {resp.status_code}: {resp.text}")
 
 
 def main() -> None:
