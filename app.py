@@ -209,6 +209,61 @@ st.markdown(
             letter-spacing: 0.06em;
         }
 
+        /* ── fancy buttons (submit + regular) ── */
+        .stButton > button,
+        [data-testid="stFormSubmitButton"] > button,
+        [data-testid="baseButton-secondary"],
+        [data-testid="baseButton-primary"],
+        button[kind="secondary"],
+        button[kind="primary"],
+        button[kind="secondaryFormSubmit"],
+        button[kind="primaryFormSubmit"] {
+            background: linear-gradient(135deg, #2563EB, #0EA5A4) !important;
+            background-color: #2563EB !important;
+            color: #FFFFFF !important;
+            border: 1px solid rgba(96,165,250,0.35) !important;
+            border-radius: 12px !important;
+            font-weight: 700 !important;
+            font-size: 0.95rem !important;
+            padding: 10px 20px !important;
+            letter-spacing: 0.02em !important;
+            box-shadow: 0 6px 18px rgba(37,99,235,0.28) !important;
+            transition: transform 0.2s, box-shadow 0.2s, filter 0.2s !important;
+        }
+        .stButton > button:hover,
+        [data-testid="stFormSubmitButton"] > button:hover,
+        button[kind="secondary"]:hover,
+        button[kind="primary"]:hover,
+        button[kind="secondaryFormSubmit"]:hover,
+        button[kind="primaryFormSubmit"]:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.08);
+            box-shadow: 0 10px 28px rgba(37,99,235,0.45) !important;
+            color: #FFFFFF !important;
+        }
+        .stButton > button p,
+        [data-testid="stFormSubmitButton"] > button p,
+        button[kind] p,
+        button[kind] div {
+            color: #FFFFFF !important;
+        }
+
+        /* Wyloguj (main-body outside form) */
+        [data-testid="stButton"] > button {
+            background: linear-gradient(135deg, #2563EB, #0EA5A4) !important;
+            color: #FFFFFF !important;
+        }
+
+        /* ── password dots — force high-contrast rendering ── */
+        input[type="password"] {
+            font-family: 'Courier New', 'Consolas', monospace !important;
+            letter-spacing: 0.3em !important;
+            font-size: 1.1rem !important;
+            color: #EAF1FF !important;
+            -webkit-text-fill-color: #EAF1FF !important;
+            font-weight: 900 !important;
+        }
+
         /* ── pointer cursor on all interactive elements ── */
         button, a, summary,
         [role="button"], [role="tab"], [role="option"], [role="radio"], [role="checkbox"],
@@ -233,6 +288,7 @@ st.markdown(
         [data-testid="stTextArea"] textarea {
             cursor: text !important;
         }
+        input[type="password"] { cursor: text !important; }
     </style>
     """,
     unsafe_allow_html=True,
