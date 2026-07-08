@@ -1,5 +1,6 @@
 import io
 import sqlite3
+import sys
 import time
 from datetime import date
 from pathlib import Path
@@ -8,11 +9,14 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from data_refresh_stock import (
     get_stock_refresh_status,
     run_refresh_stock,
     start_daily_refresh_stock,
 )
+from auth import get_session_user
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "database" / "stock_dashboard.db"
@@ -36,6 +40,25 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+
+def _auth_guard() -> tuple[str, dict]:
+    tok = st.query_params.get("token") or st.session_state.get("token", "")
+    if tok:
+        st.session_state["token"] = tok
+    current_user = get_session_user(tok) if tok else None
+    if current_user is None:
+        st.error("Brak autoryzacji. Zaloguj się w Business Intelligence Hub.")
+        st.link_button("Wróć do Hub", url="/")
+        st.stop()
+    if "stock" not in current_user["permissions"]:
+        st.error("Nie masz dostępu do aplikacji Otiocon Stock. Skontaktuj się z administratorem.")
+        st.link_button("Wróć do Hub", url=f"/?token={tok}")
+        st.stop()
+    return tok, current_user
+
+
+_auth_token, _auth_user = _auth_guard()
 
 st.markdown("""
 <style>
@@ -89,6 +112,31 @@ st.markdown("""
     button[role="tab"][aria-selected="true"] p { color: #EAF1FF !important; }
     .stSelectbox [data-baseweb="select"],
     .stSelectbox [data-baseweb="select"] * { cursor: pointer !important; }
+
+    /* ── pointer cursor on all interactive elements ── */
+    button, a, summary,
+    [role="button"], [role="tab"], [role="option"], [role="radio"], [role="checkbox"],
+    .stButton > button,
+    [data-testid="stFormSubmitButton"] > button,
+    [data-testid="stLinkButton"] a,
+    [data-testid="stDownloadButton"] > button,
+    [data-baseweb="tab"],
+    [data-baseweb="radio"] label,
+    [data-baseweb="checkbox"] label,
+    [data-testid="stRadio"] label,
+    [data-testid="stCheckbox"] label,
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] details summary,
+    [data-testid="stSelectbox"] div[data-baseweb="select"],
+    [data-testid="stDateInput"] input,
+    select, option {
+        cursor: pointer !important;
+    }
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stTextArea"] textarea {
+        cursor: text !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 

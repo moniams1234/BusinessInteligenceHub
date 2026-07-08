@@ -1,4 +1,5 @@
 import sqlite3
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -6,9 +7,12 @@ import plotly.express as px
 import streamlit as st
 import streamlit.components.v1 as components
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from data_refresh import get_refresh_status, run_refresh, start_daily_refresh
 import plotly.graph_objects as go
 from forecast import compute_forecast
+from auth import get_session_user
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -169,12 +173,38 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+
+def _auth_guard() -> tuple[str, dict]:
+    tok = st.query_params.get("token") or st.session_state.get("token", "")
+    if tok:
+        st.session_state["token"] = tok
+    current_user = get_session_user(tok) if tok else None
+    if current_user is None:
+        st.error("Brak autoryzacji. Zaloguj się w Business Intelligence Hub.")
+        st.link_button("Wróć do Hub", url="/")
+        st.stop()
+    if "sales" not in current_user["permissions"]:
+        st.error("Nie masz dostępu do aplikacji Sales. Skontaktuj się z administratorem.")
+        st.link_button("Wróć do Hub", url=f"/?token={tok}")
+        st.stop()
+    return tok, current_user
+
+
+_auth_token, _auth_user = _auth_guard()
+
 st.markdown(
     """
     <style>
         [data-testid="stSidebarNav"] { display: none; }
-        .stApp { background: #F5F7FB; }
-        [data-testid="stSidebar"] { background: #0F172A; }
+        .stApp {
+            background:
+                radial-gradient(ellipse at 100% 0%, rgba(96,165,250,0.08) 0%, transparent 60%),
+                linear-gradient(180deg, #F5F7FB 0%, #EEF2F9 100%);
+        }
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #0B1220 0%, #0F172A 40%, #101a33 100%);
+            border-right: 1px solid rgba(148, 163, 184, .12);
+        }
         [data-testid="stSidebar"] * { color: #E2E8F0; }
         [data-testid="stSidebar"] input { color: #0F172A; }
         [data-testid="stSidebar"] [data-baseweb="select"] > div,
@@ -183,19 +213,53 @@ st.markdown(
             border: 1px solid rgba(148, 163, 184, .25);
             border-radius: 12px;
         }
+        [data-testid="stSidebar"] [data-baseweb="select"] > div * {
+            color: #0F172A !important;
+        }
+        [data-testid="stSidebar"] h2 { color: #EAF1FF !important; font-weight: 800 !important; letter-spacing: -0.01em; }
         .block-container { max-width: 1500px; padding-top: 1.8rem; }
-        h1, h2, h3 { color: #0F172A; letter-spacing: -0.02em; }
+        h1 {
+            background: linear-gradient(90deg, #2563EB, #0EA5A4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 800 !important;
+            letter-spacing: -0.02em !important;
+        }
+        h2, h3 { color: #0F172A; letter-spacing: -0.02em; font-weight: 700 !important; }
         [data-testid="stMetric"] {
             background: white;
             border: 1px solid #E2E8F0;
-            border-radius: 14px;
-            padding: 1rem 1.15rem;
+            border-radius: 16px;
+            padding: 1.15rem 1.25rem;
             box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05);
+            position: relative;
+            overflow: hidden;
         }
-        [data-testid="stMetricLabel"] { color: #64748B; }
+        [data-testid="stMetric"]::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 3px;
+            background: linear-gradient(90deg, #2563EB, #0EA5A4);
+            opacity: 0.85;
+        }
+        [data-testid="stMetricLabel"] {
+            color: #64748B !important;
+            font-size: 0.78rem !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
         [data-testid="stMetricValue"] {
-            color: #0F172A;
-            font-size: clamp(1.45rem, 2vw, 2.25rem);
+            color: #0F172A !important;
+            font-size: clamp(1.5rem, 2vw, 2.35rem) !important;
+            font-weight: 800 !important;
+            letter-spacing: -0.02em;
+        }
+        [data-testid="stMetricDelta"] {
+            font-weight: 600 !important;
+            font-size: 0.82rem !important;
         }
         [data-testid="stMetric"], div[data-testid="stPlotlyChart"] {
             transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
@@ -203,7 +267,7 @@ st.markdown(
         [data-testid="stMetric"]:hover, div[data-testid="stPlotlyChart"]:hover {
             transform: translateY(-2px);
             border-color: #BFDBFE;
-            box-shadow: 0 12px 30px rgba(37, 99, 235, 0.10);
+            box-shadow: 0 12px 30px rgba(37, 99, 235, 0.12);
         }
         div[data-testid="stPlotlyChart"], div[data-testid="stDataFrame"] {
             background: white;
@@ -211,15 +275,63 @@ st.markdown(
             border-radius: 14px;
             padding: .35rem;
         }
+        /* ── sidebar status boxes (override generic sidebar color) ── */
+        [data-testid="stSidebar"] .sync-ok,
+        [data-testid="stSidebar"] .sync-error,
+        [data-testid="stSidebar"] .sync-running,
         .sync-ok, .sync-error, .sync-running {
-            border-radius: 10px;
-            padding: .65rem .8rem;
-            margin: .4rem 0 1rem;
+            border-radius: 12px;
+            padding: .75rem .9rem;
+            margin: .5rem 0 1rem;
             font-size: .86rem;
+            font-weight: 500;
+            border: 1px solid transparent;
+            backdrop-filter: blur(6px);
         }
-        .sync-ok { background: #DCFCE7; color: #166534; }
-        .sync-error { background: #FEE2E2; color: #991B1B; }
-        .sync-running { background: #DBEAFE; color: #1E40AF; }
+        [data-testid="stSidebar"] .sync-ok,
+        [data-testid="stSidebar"] .sync-ok *,
+        .sync-ok, .sync-ok * {
+            background: linear-gradient(135deg, rgba(34,197,94,0.15), rgba(16,185,129,0.10)) !important;
+            color: #86efac !important;
+        }
+        [data-testid="stSidebar"] .sync-ok,
+        .sync-ok {
+            border-color: rgba(34,197,94,0.3) !important;
+            box-shadow: 0 4px 14px rgba(34,197,94,0.15);
+        }
+        [data-testid="stSidebar"] .sync-ok strong,
+        .sync-ok strong {
+            color: #ffffff !important;
+            font-weight: 700 !important;
+            font-size: 0.95rem;
+            letter-spacing: -0.01em;
+            display: inline-block;
+            margin-top: 2px;
+        }
+        [data-testid="stSidebar"] .sync-error,
+        [data-testid="stSidebar"] .sync-error *,
+        .sync-error, .sync-error * {
+            background: linear-gradient(135deg, rgba(239,68,68,0.18), rgba(220,38,38,0.10)) !important;
+            color: #fca5a5 !important;
+        }
+        [data-testid="stSidebar"] .sync-error,
+        .sync-error {
+            border-color: rgba(239,68,68,0.3) !important;
+            box-shadow: 0 4px 14px rgba(239,68,68,0.15);
+        }
+        [data-testid="stSidebar"] .sync-error strong,
+        .sync-error strong { color: #ffffff !important; }
+        [data-testid="stSidebar"] .sync-running,
+        [data-testid="stSidebar"] .sync-running *,
+        .sync-running, .sync-running * {
+            background: linear-gradient(135deg, rgba(96,165,250,0.18), rgba(37,99,235,0.10)) !important;
+            color: #93c5fd !important;
+        }
+        [data-testid="stSidebar"] .sync-running,
+        .sync-running {
+            border-color: rgba(96,165,250,0.3) !important;
+            box-shadow: 0 4px 14px rgba(37,99,235,0.15);
+        }
         button, [role="button"], [role="tab"], [data-baseweb="select"],
         [data-testid="stDateInput"], [data-testid="stSlider"],
         [data-testid="stDownloadButton"] { cursor: pointer !important; }
@@ -246,6 +358,26 @@ st.markdown(
         [data-testid="stDataFrame"] [role="columnheader"],
         [role="option"], .stButton *, .stDownloadButton * {
             cursor: pointer !important;
+        }
+        /* ── pointer cursor on all interactive elements ── */
+        button, a, summary,
+        [role="button"], [role="tab"], [role="radio"], [role="checkbox"],
+        [data-testid="stFormSubmitButton"] > button,
+        [data-testid="stLinkButton"] a,
+        [data-baseweb="tab"],
+        [data-baseweb="radio"] label,
+        [data-baseweb="checkbox"] label,
+        [data-testid="stRadio"] label,
+        [data-testid="stCheckbox"] label,
+        [data-testid="stExpander"] summary,
+        [data-testid="stExpander"] details summary,
+        select, option {
+            cursor: pointer !important;
+        }
+        [data-testid="stTextInput"] input,
+        [data-testid="stNumberInput"] input,
+        [data-testid="stTextArea"] textarea {
+            cursor: text !important;
         }
         div[data-testid="stExpander"] {
             background: white;
