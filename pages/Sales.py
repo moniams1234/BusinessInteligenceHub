@@ -7,6 +7,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from data_refresh import get_refresh_status, run_refresh, start_daily_refresh
+import plotly.graph_objects as go
+from forecast import compute_forecast
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -304,6 +306,12 @@ def chart_layout(figure, height: int = 420):
     return figure
 
 
+@st.cache_data
+def _cached_forecast(monthly_key: tuple, horizon: int = 3) -> pd.DataFrame:
+    monthly_df = pd.DataFrame(list(monthly_key), columns=["month_name", "sales_pln"])
+    return compute_forecast(monthly_df, horizon)
+
+
 initialize_refresh_worker()
 
 components.html(
@@ -556,8 +564,8 @@ monthly_figure.update_layout(xaxis_title=T["axis_month"], yaxis_title=T["axis_sa
 monthly_figure.update_xaxes(type="category")
 st.plotly_chart(chart_layout(monthly_figure), width="stretch")
 
-overview_tab, trends_tab, details_tab = st.tabs(
-    [T["tab_overview"], T["tab_trends"], T["tab_details"]]
+overview_tab, trends_tab, details_tab, forecast_tab = st.tabs(
+    [T["tab_overview"], T["tab_trends"], T["tab_details"], T["tab_forecast"]]
 )
 
 with overview_tab:
@@ -703,3 +711,100 @@ with details_tab:
         T["download_csv"], csv, "sales_dashboard_export.csv", "text/csv",
         width="stretch",
     )
+
+with forecast_tab:
+    monthly_agg = (
+        dimension_filtered
+        .dropna(subset=["invoice_date"])
+        .groupby("month_name", as_index=False)["sales_pln"]
+        .sum()
+        .sort_values("month_name")
+    )
+    monthly_key = tuple(zip(monthly_agg["month_name"], monthly_agg["sales_pln"]))
+    forecast_df = _cached_forecast(monthly_key, horizon=3)
+
+    if forecast_df.empty:
+        st.info(T["forecast_no_data"])
+    else:
+        forecast_rows = forecast_df[forecast_df["is_forecast"]].reset_index(drop=True)
+        history_rows = forecast_df[~forecast_df["is_forecast"]]
+        stl_available = not forecast_rows["stl_forecast"].isna().all()
+
+        if not stl_available:
+            st.info(T["forecast_no_stl"])
+
+        # KPI — 3 metryki
+        kpi_cols = st.columns(3)
+        for i, col in enumerate(kpi_cols):
+            if i >= len(forecast_rows):
+                break
+            row = forecast_rows.iloc[i]
+            trend_val = row["trend_forecast"]
+            stl_val = row["stl_forecast"]
+            forecast_val = (trend_val + stl_val) / 2 if not pd.isna(stl_val) else trend_val
+            month_label = row["month_name"]
+            same_month_prev_year = (pd.Period(month_label, freq="M") - 12).strftime("%Y-%m")
+            prev_sales = dimension_filtered[
+                dimension_filtered["month_name"] == same_month_prev_year
+            ]["sales_pln"].sum()
+            col.metric(
+                T["forecast_kpi_label"].format(month=month_label),
+                format_compact_pln(forecast_val),
+                delta=_delta_pln(forecast_val, prev_sales),
+            )
+
+        # Wykres
+        display_history = history_rows.tail(18)
+        last_hist_month = display_history["month_name"].iloc[-1]
+        last_hist_val = display_history["sales_pln"].iloc[-1]
+
+        fig = go.Figure()
+
+        fig.add_trace(go.Scatter(
+            x=display_history["month_name"],
+            y=display_history["sales_pln"],
+            mode="lines+markers",
+            name=T["forecast_history_label"],
+            line=dict(color="#2563EB", width=2.5),
+            marker=dict(size=5),
+            hovertemplate="%{x}<br><b>%{y:,.0f} PLN</b><extra></extra>",
+        ))
+
+        trend_x = [last_hist_month] + list(forecast_rows["month_name"])
+        trend_y = [last_hist_val] + list(forecast_rows["trend_forecast"])
+        fig.add_trace(go.Scatter(
+            x=trend_x,
+            y=trend_y,
+            mode="lines+markers",
+            name=T["forecast_trend_label"],
+            line=dict(color="#94A3B8", width=2, dash="dash"),
+            marker=dict(size=6, symbol="diamond"),
+            hovertemplate="%{x}<br><b>%{y:,.0f} PLN</b><extra></extra>",
+        ))
+
+        if stl_available:
+            stl_x = [last_hist_month] + list(forecast_rows["month_name"])
+            stl_y = [last_hist_val] + list(forecast_rows["stl_forecast"])
+            fig.add_trace(go.Scatter(
+                x=stl_x,
+                y=stl_y,
+                mode="lines+markers",
+                name=T["forecast_stl_label"],
+                line=dict(color="#8B5CF6", width=2, dash="dash"),
+                marker=dict(size=6, symbol="circle-open"),
+                hovertemplate="%{x}<br><b>%{y:,.0f} PLN</b><extra></extra>",
+            ))
+
+        fig.add_vline(
+            x=last_hist_month,
+            line_dash="dot",
+            line_color="#CBD5E1",
+            line_width=1.5,
+        )
+        fig.update_layout(
+            title=T["forecast_chart_title"],
+            xaxis_title=T["axis_month"],
+            yaxis_title=T["axis_sales"],
+            xaxis_type="category",
+        )
+        st.plotly_chart(chart_layout(fig), width="stretch")
