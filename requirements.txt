@@ -6,3 +6,5 @@ openpyxl
 xlrd
 xlsxwriter
 pytest
+statsmodels
+numpy
