@@ -91,6 +91,7 @@ TRANSLATIONS = {
         "forecast_no_stl": "Prognoza sezonowa niedostępna. Wyświetlono tylko prognozę trendową.",
         "today_expander": "Sprzedaż dziś · {date}",
         "no_today_sales": "Brak faktur dla dzisiejszej daty ({date}).",
+        "kpi_today": "Sprzedaż dziś {date}",
     },
     "EN": {
         "subtitle": "Sales Analysis Center",
@@ -157,6 +158,7 @@ TRANSLATIONS = {
         "forecast_no_stl": "Seasonal forecast unavailable. Showing trend forecast only.",
         "today_expander": "Today's sales · {date}",
         "no_today_sales": "No invoices for today ({date}).",
+        "kpi_today": "Today's sales {date}",
     },
 }
 
@@ -471,6 +473,14 @@ prev_prev_year_sales = dimension_filtered[
     dimension_filtered["year"] == prev_year - 1
 ]["sales_pln"].sum()
 
+today_sales = dimension_filtered[
+    dimension_filtered["invoice_date"].dt.date == today.date()
+]["sales_pln"].sum()
+
+prev_today_sales = dimension_filtered[
+    dimension_filtered["invoice_date"].dt.date == today.date().replace(year=prev_year)
+]["sales_pln"].sum()
+
 
 def _delta_pln(current: float, previous: float) -> str | None:
     if previous == 0:
@@ -480,7 +490,9 @@ def _delta_pln(current: float, previous: float) -> str | None:
     return f"{sign}{diff:,.0f} PLN {T['vs_last_year']}".replace(",", " ")
 
 
-kpi_columns = st.columns(3)
+today_date_str = today.strftime("%d.%m.%Y")
+
+kpi_columns = st.columns(4)
 kpi_columns[0].metric(
     T["kpi_month"].format(month=today.strftime("%m.%Y")),
     format_compact_pln(cur_month_sales),
@@ -496,8 +508,11 @@ kpi_columns[2].metric(
     format_compact_pln(prev_year_sales),
     delta=_delta_pln(prev_year_sales, prev_prev_year_sales),
 )
-
-today_date_str = today.strftime("%d.%m.%Y")
+kpi_columns[3].metric(
+    T["kpi_today"].format(date=today_date_str),
+    format_compact_pln(today_sales),
+    delta=_delta_pln(today_sales, prev_today_sales),
+)
 today_data = dimension_filtered[
     dimension_filtered["invoice_date"].dt.date == today.date()
 ]
