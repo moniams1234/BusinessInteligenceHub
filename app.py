@@ -140,21 +140,38 @@ st.markdown(
             color: #8FB0E6 !important;
             font-size: 0.9rem !important;
         }
+        /* nuke all nested white backgrounds inside form inputs */
+        [data-testid="stForm"] [data-testid="stTextInput"],
+        [data-testid="stForm"] [data-testid="stTextInput"] > div,
+        [data-testid="stForm"] [data-testid="stTextInput"] > div > div,
+        [data-testid="stForm"] [data-testid="stTextInput"] > div > div > div,
+        [data-testid="stForm"] [data-baseweb="input"] > div,
+        [data-testid="stForm"] [data-baseweb="base-input"] > div {
+            background: transparent !important;
+            background-color: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+        }
         [data-testid="stForm"] [data-baseweb="input"],
         [data-testid="stForm"] [data-baseweb="base-input"] {
             background: rgba(255,255,255,0.06) !important;
+            background-color: rgba(255,255,255,0.06) !important;
             border: 1px solid rgba(255,255,255,0.15) !important;
             border-radius: 12px !important;
+            overflow: hidden;
         }
         [data-testid="stForm"] [data-baseweb="input"]:focus-within,
         [data-testid="stForm"] [data-baseweb="base-input"]:focus-within {
             border-color: rgba(96,165,250,0.6) !important;
             background: rgba(255,255,255,0.09) !important;
+            background-color: rgba(255,255,255,0.09) !important;
             box-shadow: 0 0 0 3px rgba(96,165,250,0.15) !important;
         }
         [data-testid="stForm"] input {
             background: transparent !important;
+            background-color: transparent !important;
             color: #EAF1FF !important;
+            -webkit-text-fill-color: #EAF1FF !important;
             border: 0 !important;
             font-size: 1rem !important;
             caret-color: #60A5FA !important;
@@ -168,6 +185,11 @@ st.markdown(
             color: rgba(143,176,230,0.55) !important;
             letter-spacing: normal !important;
             font-family: inherit !important;
+        }
+        [data-testid="stForm"] input:-webkit-autofill {
+            -webkit-box-shadow: 0 0 0 30px rgba(15,23,42,0.9) inset !important;
+            -webkit-text-fill-color: #EAF1FF !important;
+            caret-color: #60A5FA !important;
         }
         [data-testid="stForm"] button svg { fill: #8FB0E6 !important; }
         .hub-user-bar {

@@ -77,32 +77,56 @@ st.markdown(
             font-weight: 500 !important;
         }
 
-        /* ── inputs (glass, dark) — style BOTH wrapper and inner input ── */
+        /* ── inputs (glass, dark) — nuke ALL nested divs to transparent ── */
+        [data-testid="stTextInput"],
+        [data-testid="stTextInput"] > div,
+        [data-testid="stTextInput"] > div > div,
+        [data-testid="stTextInput"] > div > div > div,
         [data-testid="stTextInput"] [data-baseweb="input"],
         [data-testid="stTextInput"] [data-baseweb="base-input"],
-        [data-baseweb="input"],
-        [data-baseweb="base-input"] {
+        [data-testid="stTextInput"] [data-baseweb="input"] > div,
+        [data-testid="stTextInput"] [data-baseweb="base-input"] > div,
+        .stTextInput,
+        .stTextInput div {
+            background: transparent !important;
+            background-color: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+        }
+        /* now apply glass styling to the actual visible container */
+        [data-testid="stTextInput"] [data-baseweb="input"],
+        [data-testid="stTextInput"] [data-baseweb="base-input"] {
             background: rgba(255,255,255,0.06) !important;
+            background-color: rgba(255,255,255,0.06) !important;
             border: 1px solid rgba(255,255,255,0.15) !important;
             border-radius: 12px !important;
-            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s !important;
+            overflow: hidden;
         }
         [data-testid="stTextInput"] [data-baseweb="input"]:focus-within,
-        [data-testid="stTextInput"] [data-baseweb="base-input"]:focus-within,
-        [data-baseweb="input"]:focus-within,
-        [data-baseweb="base-input"]:focus-within {
+        [data-testid="stTextInput"] [data-baseweb="base-input"]:focus-within {
             border-color: rgba(96,165,250,0.6) !important;
             background: rgba(255,255,255,0.09) !important;
+            background-color: rgba(255,255,255,0.09) !important;
             box-shadow: 0 0 0 3px rgba(96,165,250,0.15) !important;
         }
         [data-testid="stTextInput"] input,
         [data-baseweb="input"] input,
         [data-baseweb="base-input"] input {
             background: transparent !important;
+            background-color: transparent !important;
             color: #EAF1FF !important;
             border: 0 !important;
             padding: 10px 14px !important;
             font-size: 0.95rem !important;
+            caret-color: #60A5FA !important;
+            -webkit-text-fill-color: #EAF1FF !important;
+        }
+        /* autofill: browsers force yellow bg — override */
+        [data-testid="stTextInput"] input:-webkit-autofill,
+        [data-baseweb="input"] input:-webkit-autofill {
+            -webkit-box-shadow: 0 0 0 30px rgba(15,23,42,0.9) inset !important;
+            -webkit-text-fill-color: #EAF1FF !important;
             caret-color: #60A5FA !important;
         }
         /* password dots — force high-contrast letter-spacing so they read as a mask */
