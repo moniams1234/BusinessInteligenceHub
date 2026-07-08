@@ -88,7 +88,7 @@ TRANSLATIONS = {
         "forecast_trend_label": "Prognoza (trend)",
         "forecast_stl_label": "Prognoza (sezonowa)",
         "forecast_no_data": "Za mało danych do prognozy (min. 3 miesiące).",
-        "forecast_no_stl": "Za mało historii dla dekompozycji sezonowej (min. 24 miesiące). Wyświetlono tylko prognozę trendową.",
+        "forecast_no_stl": "Prognoza sezonowa niedostępna. Wyświetlono tylko prognozę trendową.",
     },
     "EN": {
         "subtitle": "Sales Analysis Center",
@@ -152,7 +152,7 @@ TRANSLATIONS = {
         "forecast_trend_label": "Forecast (trend)",
         "forecast_stl_label": "Forecast (seasonal)",
         "forecast_no_data": "Insufficient data for forecast (min. 3 months).",
-        "forecast_no_stl": "Insufficient history for seasonal decomposition (min. 24 months). Showing trend forecast only.",
+        "forecast_no_stl": "Seasonal forecast unavailable. Showing trend forecast only.",
     },
 }
 
@@ -731,7 +731,7 @@ with forecast_tab:
         stl_available = not forecast_rows["stl_forecast"].isna().all()
 
         if not stl_available:
-            st.info(T["forecast_no_stl"])
+            st.warning(T["forecast_no_stl"])
 
         # KPI — 3 metryki
         kpi_cols = st.columns(3)
