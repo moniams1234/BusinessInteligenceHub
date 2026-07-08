@@ -905,6 +905,7 @@ with details_tab:
     )
 
 with forecast_tab:
+    current_month_label = today.strftime("%Y-%m")
     monthly_agg = (
         dimension_filtered
         .dropna(subset=["invoice_date"])
@@ -912,6 +913,8 @@ with forecast_tab:
         .sum()
         .sort_values("month_name")
     )
+    # Exclude current (incomplete) month — forecast trained only on complete history
+    monthly_agg = monthly_agg[monthly_agg["month_name"] < current_month_label]
     monthly_key = tuple(zip(monthly_agg["month_name"], monthly_agg["sales_pln"]))
     forecast_df = _cached_forecast(monthly_key, horizon=3)
 
