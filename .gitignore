@@ -15,3 +15,4 @@ screenshot*.png
 invoice_earchive.xlsx
 material_stat_daystock*.xlsx
 po*.xlsx
+setup_discord_scheduler.ps1

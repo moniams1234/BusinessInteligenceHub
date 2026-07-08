@@ -1,7 +1,7 @@
 # Uruchom jako Administrator (PPM -> "Uruchom jako administrator")
 # Przed uruchomieniem podmien TWOJ_URL_WEBHOOKA ponizej
 
-$webhookUrl  = "TWOJ_URL_WEBHOOKA"   # <-- wklej tutaj URL z Discorda
+$webhookUrl  = "TWOJ_URL_WEBHOOKA"   # <-- wklej tutaj URL z Discorda (nie commituj tego pliku!)
 $python      = (Get-Command python -ErrorAction Stop).Source
 $projectDir  = "C:\Users\48519\Documents\Monika\Szkolenia inne\Vibecoding\Project"
 $script      = "$projectDir\discord_notify.py"
