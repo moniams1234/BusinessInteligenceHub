@@ -89,6 +89,8 @@ TRANSLATIONS = {
         "forecast_stl_label": "Prognoza (sezonowa)",
         "forecast_no_data": "Za mało danych do prognozy (min. 3 miesiące).",
         "forecast_no_stl": "Prognoza sezonowa niedostępna. Wyświetlono tylko prognozę trendową.",
+        "today_expander": "Sprzedaż dziś · {date}",
+        "no_today_sales": "Brak faktur dla dzisiejszej daty ({date}).",
     },
     "EN": {
         "subtitle": "Sales Analysis Center",
@@ -153,6 +155,8 @@ TRANSLATIONS = {
         "forecast_stl_label": "Forecast (seasonal)",
         "forecast_no_data": "Insufficient data for forecast (min. 3 months).",
         "forecast_no_stl": "Seasonal forecast unavailable. Showing trend forecast only.",
+        "today_expander": "Today's sales · {date}",
+        "no_today_sales": "No invoices for today ({date}).",
     },
 }
 
@@ -492,6 +496,47 @@ kpi_columns[2].metric(
     format_compact_pln(prev_year_sales),
     delta=_delta_pln(prev_year_sales, prev_prev_year_sales),
 )
+
+today_date_str = today.strftime("%d.%m.%Y")
+today_data = dimension_filtered[
+    dimension_filtered["invoice_date"].dt.date == today.date()
+]
+
+with st.expander(
+    T["today_expander"].format(date=today_date_str),
+    expanded=True,
+):
+    if today_data.empty:
+        st.info(T["no_today_sales"].format(date=today_date_str))
+    else:
+        today_summary = (
+            today_data.groupby("customer", as_index=False)
+            .agg(
+                sales_pln=("sales_pln", "sum"),
+                invoice_count=("invoice_number", "nunique"),
+            )
+            .sort_values("sales_pln", ascending=False)
+        )
+        today_summary["share"] = (
+            today_summary["sales_pln"] / today_summary["sales_pln"].sum() * 100
+        )
+        st.dataframe(
+            today_summary,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "customer": st.column_config.TextColumn(T["col_customer"]),
+                "sales_pln": st.column_config.NumberColumn(
+                    T["col_sales"], format="%.2f PLN"
+                ),
+                "invoice_count": st.column_config.NumberColumn(
+                    T["col_invoices"], format="%d"
+                ),
+                "share": st.column_config.ProgressColumn(
+                    T["col_share"], format="%.1f%%", min_value=0, max_value=100
+                ),
+            },
+        )
 
 current_month_data = dimension_filtered[
     dimension_filtered["invoice_date"].between(month_start, today)
