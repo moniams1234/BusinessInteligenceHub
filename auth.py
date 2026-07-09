@@ -1,21 +1,25 @@
 """User authentication & authorization for Business Intelligence Hub.
 
-- SQLite user store at database/users.db
+- Postgres (Supabase) user store — persists across Streamlit Cloud
+  container restarts/redeploys, unlike the old SQLite-based store whose
+  file lived on an ephemeral filesystem and was wiped on every redeploy.
 - PBKDF2-SHA256 password hashing (stdlib only)
 - Session tokens stored server-side; passed between pages via URL query param
   (this is how sessions survive `<a target="_blank">` navigation to new tabs)
+
+Connection string is read from Streamlit secrets (SUPABASE_DB_URL), with an
+environment-variable fallback for local/non-Streamlit scripts.
 """
 
 from __future__ import annotations
 
 import hashlib
+import os
 import secrets
-import sqlite3
 from datetime import datetime, timedelta
-from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "database" / "users.db"
+import psycopg2
+import streamlit as st
 
 APPS = ("sales", "stock")
 APP_LABELS = {"sales": "Sales", "stock": "Otiocon Stock"}
@@ -24,14 +28,30 @@ SESSION_TTL_DAYS = 7
 PBKDF2_ITERATIONS = 200_000
 
 
-# ── DB init ───────────────────────────────────────────────────────────────────
+# ── DB connection ─────────────────────────────────────────────────────────────
 
 _schema_ready = False
 
 
-def _ensure_schema(conn: sqlite3.Connection) -> None:
+def _get_dsn() -> str:
+    try:
+        dsn = st.secrets["SUPABASE_DB_URL"]
+        if dsn:
+            return dsn
+    except Exception:
+        pass
+    dsn = os.environ.get("SUPABASE_DB_URL")
+    if not dsn:
+        raise RuntimeError(
+            "Brak SUPABASE_DB_URL. Dodaj go w Streamlit Cloud -> Settings -> "
+            "Secrets (albo w .streamlit/secrets.toml lokalnie)."
+        )
+    return dsn
+
+
+def _ensure_schema(cur) -> None:
     """Create tables if they don't exist yet. Cheap & idempotent."""
-    conn.execute(
+    cur.execute(
         """
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
@@ -42,41 +62,36 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
-    conn.execute(
+    cur.execute(
         """
         CREATE TABLE IF NOT EXISTS permissions (
-            username TEXT NOT NULL,
+            username TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
             app_name TEXT NOT NULL,
-            PRIMARY KEY (username, app_name),
-            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+            PRIMARY KEY (username, app_name)
         )
         """
     )
-    conn.execute(
+    cur.execute(
         """
         CREATE TABLE IF NOT EXISTS sessions (
             token TEXT PRIMARY KEY,
-            username TEXT NOT NULL,
-            expires_at TEXT NOT NULL,
-            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+            username TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+            expires_at TEXT NOT NULL
         )
         """
     )
-    conn.commit()
 
 
-def _connect() -> sqlite3.Connection:
+def _connect():
     global _schema_ready
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn = psycopg2.connect(_get_dsn(), sslmode="require")
     if not _schema_ready:
         # Guards against pages/*.py being opened directly (e.g. via a
         # bookmarked ?token=... link), which in Streamlit's multipage
-        # model runs ONLY that page's script, never app.py — so app.py's
-        # init_db() call would otherwise never fire on a fresh container
-        # and every auth query would hit "no such table: sessions".
-        _ensure_schema(conn)
+        # model runs ONLY that page's script, never app.py.
+        with conn.cursor() as cur:
+            _ensure_schema(cur)
+        conn.commit()
         _schema_ready = True
     return conn
 
@@ -85,18 +100,21 @@ def init_db() -> None:
     """Ensure tables exist and seed default admin if the users table is empty."""
     conn = _connect()
     try:
-        count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        if count == 0:
-            conn.execute(
-                "INSERT INTO users (username, password_hash, is_admin, must_change_password, created_at) VALUES (?, ?, 1, 1, ?)",
-                ("admin", hash_password("admin"), datetime.now().isoformat()),
-            )
-            for app in APPS:
-                conn.execute(
-                    "INSERT INTO permissions (username, app_name) VALUES (?, ?)",
-                    ("admin", app),
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM users")
+            count = cur.fetchone()[0]
+            if count == 0:
+                cur.execute(
+                    "INSERT INTO users (username, password_hash, is_admin, must_change_password, created_at) "
+                    "VALUES (%s, %s, 1, 1, %s)",
+                    ("admin", hash_password("admin"), datetime.now().isoformat()),
                 )
-            conn.commit()
+                for app in APPS:
+                    cur.execute(
+                        "INSERT INTO permissions (username, app_name) VALUES (%s, %s)",
+                        ("admin", app),
+                    )
+        conn.commit()
     finally:
         conn.close()
 
@@ -131,10 +149,11 @@ def create_session(username: str) -> str:
     expires = (datetime.now() + timedelta(days=SESSION_TTL_DAYS)).isoformat()
     conn = _connect()
     try:
-        conn.execute(
-            "INSERT INTO sessions (token, username, expires_at) VALUES (?, ?, ?)",
-            (token, username, expires),
-        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO sessions (token, username, expires_at) VALUES (%s, %s, %s)",
+                (token, username, expires),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -147,25 +166,29 @@ def get_session_user(token: str) -> dict | None:
         return None
     conn = _connect()
     try:
-        row = conn.execute(
-            "SELECT username, expires_at FROM sessions WHERE token = ?", (token,)
-        ).fetchone()
-        if not row:
-            return None
-        username, expires_at = row
-        if datetime.fromisoformat(expires_at) < datetime.now():
-            conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
-            conn.commit()
-            return None
-        user_row = conn.execute(
-            "SELECT username, is_admin, must_change_password FROM users WHERE username = ?",
-            (username,),
-        ).fetchone()
-        if not user_row:
-            return None
-        perm_rows = conn.execute(
-            "SELECT app_name FROM permissions WHERE username = ?", (username,)
-        ).fetchall()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT username, expires_at FROM sessions WHERE token = %s", (token,)
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            username, expires_at = row
+            if datetime.fromisoformat(expires_at) < datetime.now():
+                cur.execute("DELETE FROM sessions WHERE token = %s", (token,))
+                conn.commit()
+                return None
+            cur.execute(
+                "SELECT username, is_admin, must_change_password FROM users WHERE username = %s",
+                (username,),
+            )
+            user_row = cur.fetchone()
+            if not user_row:
+                return None
+            cur.execute(
+                "SELECT app_name FROM permissions WHERE username = %s", (username,)
+            )
+            perm_rows = cur.fetchall()
         return {
             "username": user_row[0],
             "is_admin": bool(user_row[1]),
@@ -181,7 +204,8 @@ def delete_session(token: str) -> None:
         return
     conn = _connect()
     try:
-        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM sessions WHERE token = %s", (token,))
         conn.commit()
     finally:
         conn.close()
@@ -190,9 +214,10 @@ def delete_session(token: str) -> None:
 def purge_expired_sessions() -> None:
     conn = _connect()
     try:
-        conn.execute(
-            "DELETE FROM sessions WHERE expires_at < ?", (datetime.now().isoformat(),)
-        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM sessions WHERE expires_at < %s", (datetime.now().isoformat(),)
+            )
         conn.commit()
     finally:
         conn.close()
@@ -205,18 +230,21 @@ def authenticate(username: str, password: str) -> dict | None:
     """Return user dict on success, None on failure."""
     conn = _connect()
     try:
-        row = conn.execute(
-            "SELECT password_hash, is_admin, must_change_password FROM users WHERE username = ?",
-            (username,),
-        ).fetchone()
-        if not row:
-            return None
-        password_hash, is_admin, must_change = row
-        if not verify_password(password, password_hash):
-            return None
-        perm_rows = conn.execute(
-            "SELECT app_name FROM permissions WHERE username = ?", (username,)
-        ).fetchall()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT password_hash, is_admin, must_change_password FROM users WHERE username = %s",
+                (username,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            password_hash, is_admin, must_change = row
+            if not verify_password(password, password_hash):
+                return None
+            cur.execute(
+                "SELECT app_name FROM permissions WHERE username = %s", (username,)
+            )
+            perm_rows = cur.fetchall()
         return {
             "username": username,
             "is_admin": bool(is_admin),
@@ -233,10 +261,13 @@ def authenticate(username: str, password: str) -> dict | None:
 def list_users() -> list[dict]:
     conn = _connect()
     try:
-        user_rows = conn.execute(
-            "SELECT username, is_admin, must_change_password, created_at FROM users ORDER BY username"
-        ).fetchall()
-        perm_rows = conn.execute("SELECT username, app_name FROM permissions").fetchall()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT username, is_admin, must_change_password, created_at FROM users ORDER BY username"
+            )
+            user_rows = cur.fetchall()
+            cur.execute("SELECT username, app_name FROM permissions")
+            perm_rows = cur.fetchall()
     finally:
         conn.close()
     perms_by_user: dict[str, set[str]] = {}
@@ -261,14 +292,18 @@ def create_user(username: str, password: str, is_admin: bool = False) -> bool:
         return False
     conn = _connect()
     try:
-        conn.execute(
-            "INSERT INTO users (username, password_hash, is_admin, must_change_password, created_at) VALUES (?, ?, ?, 1, ?)",
-            (username, hash_password(password), int(is_admin), datetime.now().isoformat()),
-        )
+        with conn.cursor() as cur:
+            try:
+                cur.execute(
+                    "INSERT INTO users (username, password_hash, is_admin, must_change_password, created_at) "
+                    "VALUES (%s, %s, %s, 1, %s)",
+                    (username, hash_password(password), int(is_admin), datetime.now().isoformat()),
+                )
+            except psycopg2.IntegrityError:
+                conn.rollback()
+                return False
         conn.commit()
         return True
-    except sqlite3.IntegrityError:
-        return False
     finally:
         conn.close()
 
@@ -276,7 +311,8 @@ def create_user(username: str, password: str, is_admin: bool = False) -> bool:
 def delete_user(username: str) -> None:
     conn = _connect()
     try:
-        conn.execute("DELETE FROM users WHERE username = ?", (username,))
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM users WHERE username = %s", (username,))
         conn.commit()
     finally:
         conn.close()
@@ -285,10 +321,11 @@ def delete_user(username: str) -> None:
 def set_admin(username: str, is_admin: bool) -> None:
     conn = _connect()
     try:
-        conn.execute(
-            "UPDATE users SET is_admin = ? WHERE username = ?",
-            (int(is_admin), username),
-        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET is_admin = %s WHERE username = %s",
+                (int(is_admin), username),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -299,16 +336,18 @@ def set_permission(username: str, app_name: str, granted: bool) -> None:
         raise ValueError(f"Unknown app: {app_name}")
     conn = _connect()
     try:
-        if granted:
-            conn.execute(
-                "INSERT OR IGNORE INTO permissions (username, app_name) VALUES (?, ?)",
-                (username, app_name),
-            )
-        else:
-            conn.execute(
-                "DELETE FROM permissions WHERE username = ? AND app_name = ?",
-                (username, app_name),
-            )
+        with conn.cursor() as cur:
+            if granted:
+                cur.execute(
+                    "INSERT INTO permissions (username, app_name) VALUES (%s, %s) "
+                    "ON CONFLICT (username, app_name) DO NOTHING",
+                    (username, app_name),
+                )
+            else:
+                cur.execute(
+                    "DELETE FROM permissions WHERE username = %s AND app_name = %s",
+                    (username, app_name),
+                )
         conn.commit()
     finally:
         conn.close()
@@ -317,14 +356,15 @@ def set_permission(username: str, app_name: str, granted: bool) -> None:
 def change_password(username: str, new_password: str, clear_must_change: bool = True) -> None:
     conn = _connect()
     try:
-        conn.execute(
-            "UPDATE users SET password_hash = ?, must_change_password = ? WHERE username = ?",
-            (
-                hash_password(new_password),
-                0 if clear_must_change else 1,
-                username,
-            ),
-        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET password_hash = %s, must_change_password = %s WHERE username = %s",
+                (
+                    hash_password(new_password),
+                    0 if clear_must_change else 1,
+                    username,
+                ),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -333,6 +373,8 @@ def change_password(username: str, new_password: str, clear_must_change: bool = 
 def count_admins() -> int:
     conn = _connect()
     try:
-        return conn.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1").fetchone()[0]
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1")
+            return cur.fetchone()[0]
     finally:
         conn.close()

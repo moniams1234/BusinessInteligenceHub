@@ -8,3 +8,4 @@ xlsxwriter
 pytest
 statsmodels
 numpy
+psycopg2-binary
