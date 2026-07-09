@@ -12,7 +12,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from data_refresh import get_refresh_status, run_refresh, start_daily_refresh
 import plotly.graph_objects as go
 from forecast import compute_forecast
-from auth import get_session_user
+from auth import get_session_user, init_db
+
+init_db()
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent

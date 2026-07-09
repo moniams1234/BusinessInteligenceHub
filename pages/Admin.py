@@ -14,10 +14,13 @@ from auth import (
     create_user,
     delete_user,
     get_session_user,
+    init_db,
     list_users,
     set_admin,
     set_permission,
 )
+
+init_db()
 
 st.set_page_config(
     page_title="Admin · Business Intelligence Hub",

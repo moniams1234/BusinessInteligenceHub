@@ -16,7 +16,9 @@ from data_refresh_stock import (
     run_refresh_stock,
     start_daily_refresh_stock,
 )
-from auth import get_session_user
+from auth import get_session_user, init_db
+
+init_db()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "database" / "stock_dashboard.db"

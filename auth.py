@@ -26,51 +26,65 @@ PBKDF2_ITERATIONS = 200_000
 
 # ── DB init ───────────────────────────────────────────────────────────────────
 
+_schema_ready = False
+
+
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    """Create tables if they don't exist yet. Cheap & idempotent."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT NOT NULL,
+            is_admin INTEGER NOT NULL DEFAULT 0,
+            must_change_password INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS permissions (
+            username TEXT NOT NULL,
+            app_name TEXT NOT NULL,
+            PRIMARY KEY (username, app_name),
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.commit()
+
 
 def _connect() -> sqlite3.Connection:
+    global _schema_ready
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA foreign_keys = ON")
+    if not _schema_ready:
+        # Guards against pages/*.py being opened directly (e.g. via a
+        # bookmarked ?token=... link), which in Streamlit's multipage
+        # model runs ONLY that page's script, never app.py — so app.py's
+        # init_db() call would otherwise never fire on a fresh container
+        # and every auth query would hit "no such table: sessions".
+        _ensure_schema(conn)
+        _schema_ready = True
     return conn
 
 
 def init_db() -> None:
-    """Create tables and seed default admin if empty."""
+    """Ensure tables exist and seed default admin if the users table is empty."""
     conn = _connect()
     try:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                username TEXT PRIMARY KEY,
-                password_hash TEXT NOT NULL,
-                is_admin INTEGER NOT NULL DEFAULT 0,
-                must_change_password INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS permissions (
-                username TEXT NOT NULL,
-                app_name TEXT NOT NULL,
-                PRIMARY KEY (username, app_name),
-                FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS sessions (
-                token TEXT PRIMARY KEY,
-                username TEXT NOT NULL,
-                expires_at TEXT NOT NULL,
-                FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
-            )
-            """
-        )
-        conn.commit()
-
         count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         if count == 0:
             conn.execute(
