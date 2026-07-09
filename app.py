@@ -154,18 +154,18 @@ st.markdown(
         }
         [data-testid="stForm"] [data-baseweb="input"],
         [data-testid="stForm"] [data-baseweb="base-input"] {
-            background: rgba(255,255,255,0.06) !important;
-            background-color: rgba(255,255,255,0.06) !important;
-            border: 1px solid rgba(255,255,255,0.15) !important;
+            background: rgba(255,255,255,0.14) !important;
+            background-color: rgba(255,255,255,0.14) !important;
+            border: 1.5px solid rgba(143,176,230,0.55) !important;
             border-radius: 12px !important;
             overflow: hidden;
         }
         [data-testid="stForm"] [data-baseweb="input"]:focus-within,
         [data-testid="stForm"] [data-baseweb="base-input"]:focus-within {
-            border-color: rgba(96,165,250,0.6) !important;
-            background: rgba(255,255,255,0.09) !important;
-            background-color: rgba(255,255,255,0.09) !important;
-            box-shadow: 0 0 0 3px rgba(96,165,250,0.15) !important;
+            border-color: #60A5FA !important;
+            background: rgba(255,255,255,0.18) !important;
+            background-color: rgba(255,255,255,0.18) !important;
+            box-shadow: 0 0 0 3px rgba(96,165,250,0.25) !important;
         }
         [data-testid="stForm"] input {
             background: transparent !important;
@@ -396,9 +396,14 @@ if user is None:
                 f'<div class="hub-login-title">{T["login_title"]}</div>',
                 unsafe_allow_html=True,
             )
-            username_input = st.text_input(T["login_username"], key="login_username")
+            username_input = st.text_input(
+                T["login_username"], key="login_username", placeholder=T["login_username"]
+            )
             password_input = st.text_input(
-                T["login_password"], type="password", key="login_password"
+                T["login_password"],
+                type="password",
+                key="login_password",
+                placeholder=T["login_password"],
             )
             submitted = st.form_submit_button(
                 T["login_submit"], use_container_width=True
