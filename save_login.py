@@ -2,6 +2,10 @@ import os
 import sys
 from pathlib import Path
 
+from ensure_playwright import ensure_chromium_installed
+
+ensure_chromium_installed()
+
 from playwright.sync_api import sync_playwright
 
 

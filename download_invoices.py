@@ -3,6 +3,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from ensure_playwright import ensure_chromium_installed
+
+ensure_chromium_installed()
+
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
