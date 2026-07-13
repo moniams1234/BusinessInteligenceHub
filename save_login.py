@@ -99,8 +99,16 @@ def save_session(headless: bool = True) -> None:
     auto = login is not None
 
     if not auto:
-        headless = False
-        print("Brak danych w .env — otwieram przeglądarkę do ręcznego logowania.")
+        if os.environ.get("DISPLAY"):
+            headless = False
+            print("Brak danych w .env — otwieram przeglądarkę do ręcznego logowania.")
+        else:
+            raise RuntimeError(
+                "Brak danych logowania do MyPrint (MYPRINT_LOGIN / MYPRINT_HASLO) "
+                "i brak środowiska graficznego do logowania ręcznego (typowe na "
+                "Streamlit Cloud). Dodaj MYPRINT_LOGIN i MYPRINT_HASLO w "
+                "App settings -> Secrets."
+            )
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=headless)
