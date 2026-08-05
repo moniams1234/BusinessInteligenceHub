@@ -138,6 +138,8 @@ st.markdown(
         .hub-tile--budget      { border-top: 3px solid #A78BFA; }
         .hub-tile--investment  { border-top: 3px solid #F472B6; }
         .hub-tile--cashflow    { border-top: 3px solid #38BDF8; }
+        .hub-tile--cost        { border-top: 3px solid #FB923C; box-shadow: 0 4px 30px rgba(251, 146, 60, 0.12); }
+        .hub-tile--cost:hover  { background: rgba(251, 146, 60, 0.10); border-color: rgba(251, 146, 60, 0.45); box-shadow: 0 30px 65px rgba(251, 146, 60, 0.28); }
         .tile-soon-badge {
             font-size: 0.68rem;
             letter-spacing: 0.1em;
@@ -368,6 +370,7 @@ TRANSLATIONS = {
         "budget_content": _tile_content_soon("🎯", "Actual vs Budget", "Porównanie wykonania z budżetem", "Wkrótce"),
         "investment_content": _tile_content_soon("💹", "Investment Analyser", "Analiza inwestycji i rentowności", "Wkrótce"),
         "cashflow_content": _tile_content_soon("💧", "Cash Flow", "Prognoza i monitoring przepływów pieniężnych", "Wkrótce"),
+        "cost_content": _tile_content("💰", "Cost Analyser", "Dashboard CFO — analiza kosztów i przychodów (konta 4xx/7xx)", "▶ Otwórz"),
         "footer": "Business Intelligence Hub &nbsp;·&nbsp; 2026",
     },
     "EN": {
@@ -394,6 +397,7 @@ TRANSLATIONS = {
         "budget_content": _tile_content_soon("🎯", "Actual vs Budget", "Compare actuals against budget", "Coming soon"),
         "investment_content": _tile_content_soon("💹", "Investment Analyser", "Investment and return analysis", "Coming soon"),
         "cashflow_content": _tile_content_soon("💧", "Cash Flow", "Cash flow forecasting and monitoring", "Coming soon"),
+        "cost_content": _tile_content("💰", "Cost Analyser", "CFO dashboard — cost and revenue analysis (accounts 4xx/7xx)", "▶ Open"),
         "footer": "Business Intelligence Hub &nbsp;·&nbsp; 2026",
     },
 }
@@ -529,6 +533,9 @@ if "stock" in user["permissions"]:
 if user["is_admin"]:
     tiles.append(
         f'<a class="hub-tile hub-tile--admin" href="/Admin?token={token}" target="_blank" rel="noopener">{T["admin_content"]}</a>'
+    )
+    tiles.append(
+        f'<a class="hub-tile hub-tile--cost" href="https://cost-analyser-flax.vercel.app/" target="_blank" rel="noopener">{T["cost_content"]}</a>'
     )
     tiles.append(
         f'<div class="hub-tile hub-tile--soon hub-tile--budget">{T["budget_content"]}</div>'
