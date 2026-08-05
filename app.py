@@ -64,6 +64,13 @@ st.markdown(
             letter-spacing: 0.06em;
             margin: 0;
         }
+        .hub-owner {
+            font-size: 0.8rem;
+            color: rgba(143, 176, 230, 0.6);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin: 10px 0 0;
+        }
         [data-testid="stWidgetLabel"] p,
         [data-testid="stWidgetLabel"] label { color: #8FB0E6 !important; }
 
@@ -117,6 +124,30 @@ st.markdown(
         .hub-tile--stock:hover{ background: rgba(14, 165, 164, 0.10); border-color: rgba(14, 165, 164, 0.45); box-shadow: 0 30px 65px rgba(14, 165, 164, 0.28); }
         .hub-tile--admin      { border-top: 3px solid #F59E0B; box-shadow: 0 4px 30px rgba(245, 158, 11, 0.12); }
         .hub-tile--admin:hover{ background: rgba(245, 158, 11, 0.10); border-color: rgba(245, 158, 11, 0.45); box-shadow: 0 30px 65px rgba(245, 158, 11, 0.28); }
+
+        /* ── coming-soon CFO tiles ── */
+        .hub-tile--soon {
+            cursor: default;
+            opacity: 0.55;
+            border-style: dashed;
+        }
+        .hub-tile--soon:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        .hub-tile--budget      { border-top: 3px solid #A78BFA; }
+        .hub-tile--investment  { border-top: 3px solid #F472B6; }
+        .hub-tile--cashflow    { border-top: 3px solid #38BDF8; }
+        .tile-soon-badge {
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: rgba(234, 241, 255, 0.55);
+            border: 1px solid rgba(234, 241, 255, 0.25);
+            border-radius: 999px;
+            padding: 2px 10px;
+            margin-top: 2px;
+        }
 
         /* ── login form ── */
         .hub-login-title {
@@ -303,6 +334,15 @@ def _tile_content(icon: str, title: str, desc: str, cta: str) -> str:
     )
 
 
+def _tile_content_soon(icon: str, title: str, desc: str, badge: str) -> str:
+    return (
+        f'<span class="tile-icon">{icon}</span>'
+        f'<span class="tile-title">{title}</span>'
+        f'<span class="tile-desc">{desc}</span>'
+        f'<span class="tile-soon-badge">{badge}</span>'
+    )
+
+
 TRANSLATIONS = {
     "PL": {
         "choose_app": "Wybierz aplikację",
@@ -323,8 +363,11 @@ TRANSLATIONS = {
         "pw_changed": "Hasło zostało zmienione.",
         "no_apps": "Nie masz jeszcze dostępu do żadnej aplikacji. Skontaktuj się z administratorem.",
         "sales_content": _tile_content("📊", "Sales", "Dashboard sprzedażowy · KPI · trendy R/R", "▶ Otwórz"),
-        "stock_content": _tile_content("📦", "Otiocon Stock", "Wiekowanie zapasów i kalkulacja rezerw", "▶ Otwórz"),
+        "stock_content": _tile_content("📦", "Stock", "Wiekowanie zapasów i kalkulacja rezerw", "▶ Otwórz"),
         "admin_content": _tile_content("⚙️", "Panel administratora", "Użytkownicy · uprawnienia · hasła", "▶ Otwórz"),
+        "budget_content": _tile_content_soon("🎯", "Actual vs Budget", "Porównanie wykonania z budżetem", "Wkrótce"),
+        "investment_content": _tile_content_soon("💹", "Investment Analyser", "Analiza inwestycji i rentowności", "Wkrótce"),
+        "cashflow_content": _tile_content_soon("💧", "Cash Flow", "Prognoza i monitoring przepływów pieniężnych", "Wkrótce"),
         "footer": "Business Intelligence Hub &nbsp;·&nbsp; 2026",
     },
     "EN": {
@@ -346,8 +389,11 @@ TRANSLATIONS = {
         "pw_changed": "Password changed.",
         "no_apps": "You don't have access to any application yet. Contact your administrator.",
         "sales_content": _tile_content("📊", "Sales", "Sales dashboard · KPI · YoY trends", "▶ Open"),
-        "stock_content": _tile_content("📦", "Otiocon Stock", "Inventory aging and reserve calculation", "▶ Open"),
+        "stock_content": _tile_content("📦", "Stock", "Inventory aging and reserve calculation", "▶ Open"),
         "admin_content": _tile_content("⚙️", "Admin panel", "Users · permissions · passwords", "▶ Open"),
+        "budget_content": _tile_content_soon("🎯", "Actual vs Budget", "Compare actuals against budget", "Coming soon"),
+        "investment_content": _tile_content_soon("💹", "Investment Analyser", "Investment and return analysis", "Coming soon"),
+        "cashflow_content": _tile_content_soon("💧", "Cash Flow", "Cash flow forecasting and monitoring", "Coming soon"),
         "footer": "Business Intelligence Hub &nbsp;·&nbsp; 2026",
     },
 }
@@ -368,6 +414,7 @@ st.markdown(
     <div class="hub-hero">
         <div class="hub-logo">Business Intelligence Hub</div>
         <p class="hub-tagline">{T["choose_app"]}</p>
+        <p class="hub-owner">Monika Siurnicka-Ślusarczyk</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -482,6 +529,15 @@ if "stock" in user["permissions"]:
 if user["is_admin"]:
     tiles.append(
         f'<a class="hub-tile hub-tile--admin" href="/Admin?token={token}" target="_blank" rel="noopener">{T["admin_content"]}</a>'
+    )
+    tiles.append(
+        f'<div class="hub-tile hub-tile--soon hub-tile--budget">{T["budget_content"]}</div>'
+    )
+    tiles.append(
+        f'<div class="hub-tile hub-tile--soon hub-tile--investment">{T["investment_content"]}</div>'
+    )
+    tiles.append(
+        f'<div class="hub-tile hub-tile--soon hub-tile--cashflow">{T["cashflow_content"]}</div>'
     )
 
 if not tiles:
