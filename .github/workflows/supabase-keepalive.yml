@@ -1,0 +1,27 @@
+name: Supabase keep-alive
+
+# Supabase free tier pauses a project after 7 days with no API
+# activity. This runs every 3 days to keep it awake, well within
+# the 7-day window even if a run or two gets skipped/delayed.
+on:
+  schedule:
+    - cron: "0 6 */3 * *"  # 06:00 UTC, every 3rd day
+  workflow_dispatch: {}  # allows manually triggering a run from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install psycopg2
+        run: pip install psycopg2-binary
+
+      - name: Ping Supabase
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: python scripts/supabase_keepalive.py
